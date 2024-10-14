@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Historia del Viento y Contaminación del Aire en Chile</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f5f7fa;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 5px;
+    }
+
+    .description {
+      text-align: center;
+      font-size: 18px;
+      color: #555;
+      margin-bottom: 30px;
+    }
+
+    #chart-container {
+      position: relative;
+      height: 600px;
+      margin-top: 40px;
+    }
+
+    .info-box {
+      position: absolute;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      max-width: 200px;
+      font-size: 14px;
+    }
+
+    svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 30px;
+      color: #777;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Historia del Viento y Contaminación del Aire en Chile</h1>
+    <p class="description">
+      Este gráfico muestra la intensidad del viento y su relación con eventos históricos relevantes entre 2010 y 2024.
+    </p>
+
+    <div id="chart-container">
+      <canvas id="windChart"></canvas>
+      <svg id="line-connections"></svg>
+
+      
+      <div class="info-box" style="top: 300px; left: 50px;">2011: Promulgación de Ley sobre Calidad del Aire</div>
+      <div class="info-box" style="top: 150px; left: 300px;">2015: Crisis ambiental en Santiago</div>
+      <div class="info-box" style="top: 400px; left: 725px;">2020: Políticas de descarbonización</div>
+    </div>
+
+    <footer>
+      <p>IIC2026 - Grupo 11 - 2024-2</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    async function cargarCSV(ruta) {
+      const response = await fetch(ruta);
+      const data = await response.text();
+
+      return data
+        .trim()
+        .split('\n')
+        .slice(1)
+        .map(line => {
+          const [year, intensity, direction] = line.split(';');
+          return {
+            year: parseInt(year),
+            intensity: parseInt(intensity.replace(' kt', '')),
+            direction: direction.trim()
+          };
+        });
+    }
+
+    async function dibujarGrafico() {
+      const data = await cargarCSV('vientos.csv');
+
+      const ctx = document.getElementById('windChart').getContext('2d');
+      const labels = data.map(item => item.year);
+      const intensities = data.map(item => item.intensity);
+
+      const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Intensidad del Viento (kt)',
+            data: intensities,
+            borderColor: '#FF9800',
+            backgroundColor: 'rgba(255, 152, 0, 0.2)',
+            borderWidth: 2,
+            pointRadius: 6,
+            pointBackgroundColor: '#FF9800',
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: { font: { size: 14, weight: 'bold' } }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Intensidad (kt)', font: { size: 16, weight: 'bold' } }
+            },
+            x: {
+              title: { display: true, text: 'Año', font: { size: 16, weight: 'bold' } }
+            }
+          }
+        }
+      });
+
+      conectarPuntos(chart);
+    }
+
+    function conectarPuntos(chart) {
+      const svg = document.getElementById('line-connections');
+      const meta = chart.getDatasetMeta(0);
+      const puntos = meta.data;
+
+      const infoBoxes = document.querySelectorAll('.info-box');
+      const posiciones = [
+        { year: 2011, box: infoBoxes[0] },
+        { year: 2015, box: infoBoxes[1] },
+        { year: 2020, box: infoBoxes[2] }
+      ];
+
+      posiciones.forEach(({ year, box }) => {
+        const punto = puntos.find(p => p.element.$context.raw === year);
+        if (punto) {
+          const { x, y } = punto.tooltipPosition();
+          const { offsetLeft, offsetTop } = box;
+
+          const linea = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          linea.setAttribute('x1', x);
+          linea.setAttribute('y1', y);
+          linea.setAttribute('x2', offsetLeft);
+          linea.setAttribute('y2', offsetTop);
+          linea.setAttribute('stroke', '#FF9800');
+          linea.setAttribute('stroke-width', '2');
+          svg.appendChild(linea);
+        }
+      });
+    }
+
+    dibujarGrafico();
+  </script>
+
+</body>
+</html>

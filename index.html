@@ -130,6 +130,7 @@
   border: 2px solid #ccc;
   border-radius: 8px;
   box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
+
 }
 
 
@@ -199,6 +200,21 @@
     transition: transform 0.3s, border-bottom-color 0.3s;
 }
 
+#playPauseButton {
+    position: relative;
+    top: 5px;
+    left: 500px;
+    width: 230px;
+    font-size: 14px;
+    padding: 6px 10px;
+    background-color: #FF9800;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+
 
   </style>
   
@@ -215,7 +231,9 @@
         <canvas id="windChart"></canvas>
         <svg id="line-connections"></svg>
         
+        
         <!-- InfoBoxes y Rosa de los Vientos... -->
+        <div id="playPauseButton" class="play-pause-icon" onclick="toggleWindHistory()">▶️ Reproducir historia del viento</div>
         <div class="info-box" style="top: 60px; left: 50px;">2011: Promulgación de Ley sobre Calidad del Aire</div>
         <div class="info-box" style="top: 150px; left: 300px;">2015: Crisis ambiental en Santiago</div>
         <div class="info-box" style="top: 60px; left: 750px;">2020: Políticas de descarbonización</div>
@@ -255,6 +273,12 @@
     let mouseOnInfoBox = false;
     let soundPlaying = false; // Nueva bandera para el estado del sonido
 
+    let windHistoryPlaying = false;
+    let currentIndex = 0;
+    let windMarker = null;
+    let animationFrameId;
+    let windChart; // Definir globalmente
+
     async function cargarCSV(ruta) {
         const response = await fetch(ruta);
         const data = await response.text();
@@ -274,62 +298,62 @@
     }
 
     async function dibujarGrafico() {
-        const data = await cargarCSV('vientos.csv');
-        const ctx = document.getElementById('windChart').getContext('2d');
-        const labels = data.map(item => item.year);
-        const intensities = data.map(item => item.intensity);
+    const data = await cargarCSV('vientos.csv');
+    const ctx = document.getElementById('windChart').getContext('2d');
+    const labels = data.map(item => item.year);
+    const intensities = data.map(item => item.intensity);
 
-        const chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels,
-                datasets: [{
-                    label: 'Intensidad promedio del Viento (kt)',
-                    data: intensities,
-                    borderColor: '#FF9800',
-                    backgroundColor: 'rgba(255, 152, 0, 0.2)',
-                    borderWidth: 2,
-                    pointRadius: 6,
-                    pointBackgroundColor: '#FF9800',
-                }]
+    windChart = new Chart(ctx, { // Usar la variable global
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Intensidad promedio del Viento (kt)',
+                data: intensities,
+                borderColor: '#FF9800',
+                backgroundColor: 'rgba(255, 152, 0, 0.2)',
+                borderWidth: 2,
+                pointRadius: 6,
+                pointBackgroundColor: '#FF9800',
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { font: { size: 14, weight: 'bold' } }
+                },
+                tooltip: { enabled: false }
             },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'top',
-                        labels: { font: { size: 14, weight: 'bold' } }
-                    },
-                    tooltip: { enabled: false }
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 40,
+                    title: { display: true, text: 'Intensidad (kt)', font: { size: 16, weight: 'bold' } }
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 40,
-                        title: { display: true, text: 'Intensidad (kt)', font: { size: 16, weight: 'bold' } }
-                    },
-                    x: {
-                        title: { display: true, text: 'Año', font: { size: 16, weight: 'bold' } }
-                    }
-                },
-                onHover: (event, elements) => {
-                    if (elements.length > 0) {
-                        mouseOnPoint = true;
-                        const index = elements[0].index;
-                        const year = labels[index];
-                        const intensity = intensities[index];
-                        const direction = data[index].direction;
-                        showInfoBox(year, intensity, elements[0].element, index, direction);
-                    } else {
-                        mouseOnPoint = false;
-                        setTimeout(() => {
-                            if (!mouseOnPoint && !mouseOnInfoBox && !soundPlaying) closeInfoBox(); // Revisar bandera
-                        }, 100);
-                    }
+                x: {
+                    title: { display: true, text: 'Año', font: { size: 16, weight: 'bold' } }
+                }
+            },
+            onHover: (event, elements) => {
+                if (elements.length > 0) {
+                    mouseOnPoint = true;
+                    const index = elements[0].index;
+                    const year = labels[index];
+                    const intensity = intensities[index];
+                    const direction = data[index].direction;
+                    showInfoBox(year, intensity, elements[0].element, index, direction);
+                } else {
+                    mouseOnPoint = false;
+                    setTimeout(() => {
+                        if (!mouseOnPoint && !mouseOnInfoBox && !soundPlaying) closeInfoBox(); // Revisar bandera
+                    }, 100);
                 }
             }
-        });
-    }
+        }
+    });
+}
 
     function showInfoBox(year, intensity, pointElement, index, direction) {
         if (activeInfoBox && activePointIndex === index) return;

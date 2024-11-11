@@ -6,7 +6,6 @@
   <title>Historia del Viento y Contaminación del Aire en Chile</title>
 
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500&display=swap" rel="stylesheet">
-  <script src="https://d3js.org/d3.v6.min.js"></script>
 
   <style>
     body {
@@ -17,7 +16,7 @@
     }
 
     .container {
-      max-width: 800px;
+      max-width: 1200px;
       margin: 0 auto;
     }
 
@@ -34,21 +33,30 @@
       margin-bottom: 30px;
     }
 
-    #chart {
-      margin-top: 40px;
+    #chart-container {
       position: relative;
+      height: 600px;
+      margin-top: 40px;
     }
 
-    .tooltip {
+    .info-box {
       position: absolute;
-      background-color: #333;
-      color: #fff;
-      padding: 5px 10px;
-      border-radius: 5px;
-      font-size: 12px;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      max-width: 200px;
+      font-size: 14px;
+    }
+
+    svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.2s;
     }
 
     footer {
@@ -75,217 +83,131 @@
 </head>
 <body>
 
-<div class="container">
-  <h1>Historia de los Vientos y Cambio Climático en Santiago de Chile</h1>
-  <p class="description">
-    Intensidad de los vientos y su relación con eventos históricos relevantes entre 2010 y 2024.
-  </p>
+  <div class="container">
+    <h1>Historia de los Vientos y Cambio Climático en Santiago de Chile</h1>
+    <p class="description">
+      Intensidad de los vientos y su relación con eventos históricos relevantes entre 2010 y 2024.
+    </p>
 
-  <div id="chart"></div>
-  <div class="tooltip" id="tooltip"></div>
+    <div id="chart-container">
+      <canvas id="windChart"></canvas>
+      <svg id="line-connections"></svg>
 
-  <div class="source-link">
-    Fuente: <a href="https://www.meteochile.gob.cl/" target="_blank">Dirección Meteorológica de Chile</a>
-    Estación: 330019
+      
+      <div class="info-box" style="top: 60px; left: 50px;">2011: Promulgación de Ley sobre Calidad del Aire</div>
+      <div class="info-box" style="top: 150px; left: 300px;">2015: Crisis ambiental en Santiago</div>
+      <div class="info-box" style="top: 60px; left: 750px;">2020: Políticas de descarbonización</div>
+    </div>
+
+    <div class="source-link">
+      Fuente: <a href="https://www.meteochile.gob.cl/" target="_blank">Dirección Meteorológica de Chile</a>
+      Estación: 330019
+    </div>
+
+    <footer>
+      <p>IIC2026 - Grupo 11 - 2024-2</p>
+    </footer>
   </div>
 
-  <footer>
-    <p>IIC2026 - Grupo 11 - 2024-2</p>
-  </footer>
-</div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<script>
-    // Configuración inicial
-    const width = 800;
-    const height = 400;
-    const margin = {top: 50, right: 50, bottom: 50, left: 50};
+  <script>
+    async function cargarCSV(ruta) {
+      const response = await fetch(ruta);
+      const data = await response.text();
 
-    // Crear SVG para el gráfico
-    const svg = d3.select("#chart")
-                  .append("svg")
-                  .attr("width", width + margin.left + margin.right)
-                  .attr("height", height + margin.top + margin.bottom);
+      return data
+        .trim()
+        .split('\n')
+        .slice(1)
+        .map(line => {
+          const [year, intensity, direction] = line.split(';');
+          return {
+            year: parseInt(year),
+            intensity: parseInt(intensity.replace(' kt', '')),
+            direction: direction.trim()
+          };
+        });
+    }
 
-    // Definir patrón de fondo
-    svg.append("defs")
-       .append("pattern")
-       .attr("id", "windPattern")
-       .attr("width", 20)
-       .attr("height", 20)
-       .attr("patternUnits", "userSpaceOnUse")
-       .append("text")
-       .attr("x", 0)
-       .attr("y", 15)
-       .attr("font-size", "20px")
-       .attr("fill", "rgba(0, 128, 0, 0.2)")
-       .text("∼");
-  
-    // Agregar rectángulo de fondo con el patrón
-    svg.append("rect")
-       .attr("x", margin.left)
-       .attr("y", margin.top)
-       .attr("width", width)
-       .attr("height", height)
-       .attr("fill", "url(#windPattern)")
-       .on("click", () => {
-          // Reproducir el sonido de viento al hacer clic
-          const audio = new Audio('wind_sound_wav');
-          audio.play();
-       });
+    async function dibujarGrafico() {
+      const data = await cargarCSV('vientos.csv');
 
-    // Crear grupo de elementos para el gráfico
-    const chartGroup = svg.append("g")
-                          .attr("transform", `translate(${margin.left}, ${margin.top})`);
+      const ctx = document.getElementById('windChart').getContext('2d');
+      const labels = data.map(item => item.year);
+      const intensities = data.map(item => item.intensity);
 
-    // Crear el sonido fuera de la función para evitar superposiciones
-    const sonidoViento = new Audio("wind_sound.wav");
-    let sonidoReproduciendo = false;
-
-    // Crear íconos y texto en la esquina superior derecha de la visualización
-    const instructionsGroup = svg.append("g")
-                                 .attr("transform", `translate(${width + margin.left - 100}, ${margin.top - 10})`)
-                                 .attr("fill", "rgba(0, 128, 0, 0.6)");
-  
-    instructionsGroup.append("text")
-                     .attr("x", 0)
-                     .attr("y", 20)
-                     .attr("font-size", "18px")
-                     .text("🔊");
-  
-    instructionsGroup.append("text")
-                     .attr("x", 25)
-                     .attr("y", 20)
-                     .attr("font-size", "18px")
-                     .text("🖱️");
-  
-    instructionsGroup.append("text")
-                     .attr("x", 50)
-                     .attr("y", 20)
-                     .attr("font-size", "18px")
-                     .text("click!");
-
-    // Línea de seguimiento vertical
-    const trackingLine = chartGroup.append("line")
-                                   .attr("stroke", "rgba(0, 128, 0, 0.4)")
-                                   .attr("stroke-width", 1)
-                                   .style("pointer-events", "none")
-                                   .attr("y1", 0)
-                                   .attr("y2", height)
-                                   .attr("opacity", 0);
-
-    // Cargar datos del CSV con punto y coma como delimitador
-    d3.dsv(";", "vientos.csv").then(data => {
-      data.forEach(d => {
-        d.AÑO = +d.AÑO;
-        d.INTENSIDAD = +d.INTENSIDAD.replace(' kt', '');
-      });
-
-      const x = d3.scaleLinear()
-                  .domain(d3.extent(data, d => d.AÑO))
-                  .range([0, width]);
-
-      const y = d3.scaleLinear()
-                  .domain([0, d3.max(data, d => d.INTENSIDAD)])
-                  .range([height, 0]);
-
-      // Ejes
-      chartGroup.append("g")
-         .attr("transform", `translate(0,${height})`)
-         .call(d3.axisBottom(x).ticks(data.length).tickFormat(d3.format("d")));
-
-      chartGroup.append("g")
-         .call(d3.axisLeft(y));
-
-      // Línea de viento
-      chartGroup.append("path")
-         .datum(data)
-         .attr("fill", "none")
-         .attr("stroke", "#FF9800")
-         .attr("stroke-width", 2)
-         .attr("d", d3.line()
-                      .x(d => x(d.AÑO))
-                      .y(d => y(d.INTENSIDAD)));
-
-      // Puntos de intensidad
-      chartGroup.selectAll("circle")
-         .data(data)
-         .enter()
-         .append("circle")
-         .attr("cx", d => x(d.AÑO))
-         .attr("cy", d => y(d.INTENSIDAD))
-         .attr("r", 6)
-         .attr("fill", "#FF9800");
-
-      // Configurar el evento de mousemove
-      svg.on("mousemove", (event) => {
-        const [mouseX] = d3.pointer(event);
-        const chartX = mouseX - margin.left;
-
-        if (chartX >= 0 && chartX <= width) {
-          // Mostrar línea de seguimiento en la posición del mouse
-          trackingLine.attr("x1", chartX)
-                      .attr("x2", chartX)
-                      .attr("opacity", 1);
-
-          // Buscar el punto más cercano en el eje Y
-          const closestPoint = data.reduce((prev, curr) => {
-            return Math.abs(x(curr.AÑO) - chartX) < Math.abs(x(prev.AÑO) - chartX) ? curr : prev;
-          });
-
-          // Ajustar el volumen en función de la intensidad del punto más cercano
-          const volumen = Math.min(Math.max(closestPoint.INTENSIDAD / 50, 0), 20);
-          sonidoViento.volume = volumen;
-
-          // Reproducir sonido o ajustar volumen si ya está en reproducción
-          if (!sonidoReproduciendo) {
-            sonidoViento.play();
-            sonidoReproduciendo = true;
+      const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Intensidad promedio del Viento (kt)',
+            data: intensities,
+            borderColor: '#FF9800',
+            backgroundColor: 'rgba(255, 152, 0, 0.2)',
+            borderWidth: 2,
+            pointRadius: 6,
+            pointBackgroundColor: '#FF9800',
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: { font: { size: 14, weight: 'bold' } }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 40,
+              title: { display: true, text: 'Intensidad (kt)', font: { size: 16, weight: 'bold' } }
+            },
+            x: {
+              title: { display: true, text: 'Año', font: { size: 16, weight: 'bold' } }
+            }
           }
-        } else {
-          // Ocultar línea de seguimiento si el mouse sale del área del gráfico
-          trackingLine.attr("opacity", 0);
         }
-      })
-      .on("mouseout", () => {
-        // Pausar y ocultar el sonido cuando el mouse sale del gráfico
-        trackingLine.attr("opacity", 0);
-        sonidoViento.pause();
-        sonidoViento.currentTime = 0;
-        sonidoReproduciendo = false;
       });
 
-      // Hitos de contaminación
-      const hitos = [
-        {year: 2011, description: 'Protestas estudiantiles'},
-        {year: 2015, description: 'Declaración de emergencia ambiental'},
-        {year: 2020, description: 'Pandemia de COVID-19'},
-        {year: 2024, description: 'Políticas de reducción de emisiones'}
+      conectarPuntos(chart);
+    }
+
+    function conectarPuntos(chart) {
+      const svg = document.getElementById('line-connections');
+      const meta = chart.getDatasetMeta(0);
+      const puntos = meta.data;
+
+      const infoBoxes = document.querySelectorAll('.info-box');
+      const posiciones = [
+        { year: 2011, box: infoBoxes[0] },
+        { year: 2015, box: infoBoxes[1] },
+        { year: 2020, box: infoBoxes[2] }
       ];
 
-      chartGroup.selectAll(".hito-linea")
-         .data(hitos)
-         .enter()
-         .append("line")
-         .attr("x1", d => x(d.year))
-         .attr("y1", y(0))
-         .attr("x2", d => x(d.year))
-         .attr("y2", y(d3.max(data, d => d.INTENSIDAD)))
-         .attr("stroke", "#FF9800")
-         .attr("stroke-dasharray", "4");
+      posiciones.forEach(({ year, box }) => {
+        const punto = puntos.find(p => p.element.$context.raw === year);
+        if (punto) {
+          const { x, y } = punto.tooltipPosition();
+          const { offsetLeft, offsetTop } = box;
 
-      chartGroup.selectAll(".hito-texto")
-         .data(hitos)
-         .enter()
-         .append("text")
-         .attr("x", d => x(d.year) + 5)
-         .attr("y", y(0) - 10)
-         .text(d => d.description)
-         .attr("fill", "#333")
-         .attr("font-size", "12px");
+          const linea = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          linea.setAttribute('x1', x);
+          linea.setAttribute('y1', y);
+          linea.setAttribute('x2', offsetLeft);
+          linea.setAttribute('y2', offsetTop);
+          linea.setAttribute('stroke', '#FF9800');
+          linea.setAttribute('stroke-width', '2');
+          svg.appendChild(linea);
+        }
+      });
+    }
+    
 
-
-    });
-</script>
+    dibujarGrafico();
+  </script>
 
 </body>
 </html>

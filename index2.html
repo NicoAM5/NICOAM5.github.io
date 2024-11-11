@@ -7,7 +7,7 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500&display=swap" rel="stylesheet">
 
-  <style>
+<style>
     body {
       font-family: 'Poppins', sans-serif;
       background-color: #f5f7fa;
@@ -116,29 +116,22 @@
     }
 
     .wind-rose {
-  position: absolute;
-  top: 36px; /* Reduce este valor para acercar la rosa al gráfico */
-  left: 1040px; /* Ajusta este valor para centrarla mejor horizontalmente */
-  display: grid;
-  grid-template-columns: 30px 60px 30px;
-  grid-template-rows: 30px 60px 30px;
-  width: 120px; /* Ajusta el ancho si es necesario */
-  height: 120px;
-  justify-items: center;
-  align-items: center;
-  background-color: white;
-  border: 2px solid #ccc;
-  border-radius: 8px;
-  box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
+    position: absolute;
+    top: 20px; /* Ajustada para mejorar la visibilidad */
+    left: 20px; /* Moverla más hacia la izquierda */
+    display: grid;
+    grid-template-columns: 30px 50px 30px; /* Ajustado para hacerlo más compacto */
+    grid-template-rows: 30px 50px 30px;
+    width: 120px;
+    height: 120px;
+    justify-items: center;
+    align-items: center;
 }
-
-
-
 
 .wind-rose div {
     font-weight: bold;
     color: #7a7a7a;
-    font-size: 16px; /* Reducir tamaño del texto */
+    font-size: 14px; /* Reducir tamaño del texto */
     transition: color 0.3s;
 }
 
@@ -193,60 +186,42 @@
     transform: translate(-50%, -100%) rotate(0deg); /* Mantenerla centrada y rotarla hacia las direcciones */
     width: 0;
     height: 0;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-bottom: 22px solid #7a7a7a;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 18px solid #7a7a7a;
     transition: transform 0.3s, border-bottom-color 0.3s;
 }
 
 
+
+
   </style>
-  
 </head>
 <body>
+  <div class="container">
+    <h1>Historia de los Vientos y Cambio Climático en Santiago de Chile</h1>
+    <p class="description">
+      Intensidad de los vientos y su relación con eventos históricos relevantes entre 2010 y 2024.
+    </p>
 
-    <div class="container">
-      <h1>Historia de los Vientos y Cambio Climático en Santiago de Chile</h1>
-      <p class="description">
-        Intensidad de los vientos y su relación con eventos históricos relevantes entre 2010 y 2024.
-      </p>
-
-      <div id="chart-container">
-        <canvas id="windChart"></canvas>
-        <svg id="line-connections"></svg>
-        
-        <!-- InfoBoxes y Rosa de los Vientos... -->
-        <div class="info-box" style="top: 60px; left: 50px;">2011: Promulgación de Ley sobre Calidad del Aire</div>
-        <div class="info-box" style="top: 150px; left: 300px;">2015: Crisis ambiental en Santiago</div>
-        <div class="info-box" style="top: 60px; left: 750px;">2020: Políticas de descarbonización</div>
-  
-        <div class="wind-rose">
-          <div id="wind-NW">NW</div>
-          <div id="wind-N">N</div>
-          <div id="wind-NE">NE</div>
-          <div id="wind-W">W</div>
-          <div id="wind-center"><div class="arrow"></div></div> <!-- Centro con flecha -->
-          <div id="wind-E">E</div>
-          <div id="wind-SW">SW</div>
-          <div id="wind-S">S</div>
-          <div id="wind-SE">SE</div>
-      </div>
-
-      <div class="source-link">
-        Fuente: <a href="https://www.meteochile.gob.cl/" target="_blank">Dirección Meteorológica de Chile</a>
-        Estación: 330019
-      </div>
-
-      <footer>
-        <p>IIC2026 - Grupo 11 - 2024-2</p>
-      </footer>
+    <div id="chart-container">
+      <canvas id="windChart"></canvas>
+      <svg id="line-connections"></svg>
+      
+      <!-- InfoBoxes y Rosa de los Vientos... -->
     </div>
-    
-    
-</div>
+
+    <div class="source-link">
+      Fuente: <a href="https://www.meteochile.gob.cl/" target="_blank">Dirección Meteorológica de Chile</a>
+      Estación: 330019
+    </div>
+
+    <footer>
+      <p>IIC2026 - Grupo 11 - 2024-2</p>
+    </footer>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
   <script>
     let currentAudio = null;
     let activeInfoBox = null;
@@ -255,81 +230,7 @@
     let mouseOnInfoBox = false;
     let soundPlaying = false; // Nueva bandera para el estado del sonido
 
-    async function cargarCSV(ruta) {
-        const response = await fetch(ruta);
-        const data = await response.text();
-
-        return data
-            .trim()
-            .split('\n')
-            .slice(1)
-            .map(line => {
-                const [year, intensity, direction] = line.split(';');
-                return {
-                    year: parseInt(year),
-                    intensity: parseInt(intensity.replace(' kt', '')),
-                    direction: direction.trim()
-                };
-            });
-    }
-
-    async function dibujarGrafico() {
-        const data = await cargarCSV('vientos.csv');
-        const ctx = document.getElementById('windChart').getContext('2d');
-        const labels = data.map(item => item.year);
-        const intensities = data.map(item => item.intensity);
-
-        const chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels,
-                datasets: [{
-                    label: 'Intensidad promedio del Viento (kt)',
-                    data: intensities,
-                    borderColor: '#FF9800',
-                    backgroundColor: 'rgba(255, 152, 0, 0.2)',
-                    borderWidth: 2,
-                    pointRadius: 6,
-                    pointBackgroundColor: '#FF9800',
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'top',
-                        labels: { font: { size: 14, weight: 'bold' } }
-                    },
-                    tooltip: { enabled: false }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 40,
-                        title: { display: true, text: 'Intensidad (kt)', font: { size: 16, weight: 'bold' } }
-                    },
-                    x: {
-                        title: { display: true, text: 'Año', font: { size: 16, weight: 'bold' } }
-                    }
-                },
-                onHover: (event, elements) => {
-                    if (elements.length > 0) {
-                        mouseOnPoint = true;
-                        const index = elements[0].index;
-                        const year = labels[index];
-                        const intensity = intensities[index];
-                        const direction = data[index].direction;
-                        showInfoBox(year, intensity, elements[0].element, index, direction);
-                    } else {
-                        mouseOnPoint = false;
-                        setTimeout(() => {
-                            if (!mouseOnPoint && !mouseOnInfoBox && !soundPlaying) closeInfoBox(); // Revisar bandera
-                        }, 100);
-                    }
-                }
-            }
-        });
-    }
+    // Funciones existentes...
 
     function showInfoBox(year, intensity, pointElement, index, direction) {
         if (activeInfoBox && activePointIndex === index) return;
@@ -408,52 +309,7 @@
         }
     }
 
-    function highlightWindDirection(direction) {
-    resetWindDirection(); // Resetear cualquier dirección activa
-
-    const directionElement = document.getElementById(`wind-${direction}`);
-    const arrowElement = document.querySelector('.wind-rose #wind-center .arrow');
-
-    if (directionElement) {
-        directionElement.classList.add('active');
-
-        // Mapear cada dirección a un ángulo
-        const directionAngles = {
-            N: 0,
-            NE: 45,
-            E: 90,
-            SE: 135,
-            S: 180,
-            SW: 225,
-            W: 270,
-            NW: 315
-        };
-
-        const angle = directionAngles[direction];
-        arrowElement.style.transform = `translate(-50%, -100%) rotate(${angle}deg)`;
-        arrowElement.style.borderBottomColor = '#FF0000'; // Cambiar color a rojo
-    }
-}
-
-function resetWindDirection() {
-    document.querySelectorAll('.wind-rose .active').forEach(element => {
-        element.classList.remove('active');
-    });
-
-    const arrowElement = document.querySelector('.wind-rose #wind-center .arrow');
-    arrowElement.style.transform = 'translate(-50%, -100%) rotate(0deg)';
-    arrowElement.style.borderBottomColor = '#7a7a7a'; // Volver al color gris
-}
-
-
-
     dibujarGrafico();
-</script>
-
-
-
-
-
-
+  </script>
 </body>
 </html>

@@ -115,10 +115,25 @@
         align-items: center;
     }
 
+    .event-box {
+      position: absolute;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      max-width: 200px;
+      font-size: 14px;
+      z-index: 10;
+    }
+
+
+
+
     .wind-rose {
   position: absolute;
-  top: 36px; /* Reduce este valor para acercar la rosa al gráfico */
-  left: 1040px; /* Ajusta este valor para centrarla mejor horizontalmente */
+  top: 418px; /* Reduce este valor para acercar la rosa al gráfico */
+  left: 70px; /* Ajusta este valor para centrarla mejor horizontalmente */
   display: grid;
   grid-template-columns: 30px 60px 30px;
   grid-template-rows: 30px 60px 30px;
@@ -222,9 +237,9 @@
 <body>
 
     <div class="container">
-      <h1>Historia de los Vientos y Cambio Climático en Santiago de Chile</h1>
+      <h1>Caídas en la Intensidad del viento en base a hitos importantes frente a la crisis climática en Santiago de Chile</h1>
       <p class="description">
-        Intensidad de los vientos y su relación con eventos históricos relevantes entre 2010 y 2024.
+        Intensidad de los vientos y su relación con eventos históricos relevantes a la crisis climática entre 2010 y 2024.
       </p>
 
       <div id="chart-container">
@@ -233,10 +248,10 @@
         
         
         <!-- InfoBoxes y Rosa de los Vientos... -->
-        <div id="playPauseButton" class="play-pause-icon" onclick="toggleWindHistory()">▶️ Reproducir historia del viento</div>
-        <div class="info-box" style="top: 60px; left: 50px;">2011: Promulgación de Ley sobre Calidad del Aire</div>
-        <div class="info-box" style="top: 150px; left: 300px;">2015: Crisis ambiental en Santiago</div>
-        <div class="info-box" style="top: 60px; left: 750px;">2020: Políticas de descarbonización</div>
+      <div class="event-box" style="top: 65px; left: 136px;">2011: Promulgación de Ley sobre Calidad del Aire</div>
+      <div class="event-box" style="top: 280px; left: 462px;">2015: Crisis ambiental en Santiago</div>
+      <div class="event-box" style="top: 70px; left: 865px;">2020: Confinamiento por pandemia Covid-19</div>
+        
   
         <div class="wind-rose">
           <div id="wind-NW">NW</div>
@@ -273,12 +288,6 @@
     let mouseOnInfoBox = false;
     let soundPlaying = false; // Nueva bandera para el estado del sonido
 
-    let windHistoryPlaying = false;
-    let currentIndex = 0;
-    let windMarker = null;
-    let animationFrameId;
-    let windChart; // Definir globalmente
-
     async function cargarCSV(ruta) {
         const response = await fetch(ruta);
         const data = await response.text();
@@ -303,7 +312,7 @@
     const labels = data.map(item => item.year);
     const intensities = data.map(item => item.intensity);
 
-    windChart = new Chart(ctx, { // Usar la variable global
+    const chart = new Chart(ctx, {
         type: 'line',
         data: {
             labels,
@@ -353,7 +362,44 @@
             }
         }
     });
+
+    // Después de dibujar el gráfico, muestra los eventos
+    showEventLabels(labels, data, chart);
 }
+
+async function showEventLabels(labels, data, chart) {
+    const chartContainer = document.getElementById('chart-container');
+    
+    const events = [
+        { year: 2011, text: 'Promulgación de Ley sobre Calidad del Aire' },
+        { year: 2015, text: 'Crisis ambiental en Santiago' },
+        { year: 2020, text: 'Políticas de descarbonización' }
+    ];
+
+    events.forEach(event => {
+        const index = labels.indexOf(event.year);
+        if (index !== -1) {
+            // Obtener las coordenadas del punto correspondiente usando el chart
+            const point = chart.getDatasetMeta(0).data[index];
+
+            // Crear el div para el evento
+            const eventLabel = document.createElement('div');
+            eventLabel.className = 'event-label';
+            eventLabel.innerText = `${event.year}: ${event.text}`;
+
+            // Obtener las coordenadas del punto en el gráfico usando el método 'getPointPosition'
+            const pointPosition = point.getCenterPoint();  // Usamos el centro del punto para el evento
+
+            // Posicionar el evento sobre el punto
+            eventLabel.style.top = `${pointPosition.y - 40}px`;  // Ajustar la altura para que esté arriba
+            eventLabel.style.left = `${pointPosition.x - eventLabel.offsetWidth / 2}px`;  // Centrar sobre el punto
+
+            chartContainer.appendChild(eventLabel);
+        }
+    });
+}
+
+
 
     function showInfoBox(year, intensity, pointElement, index, direction) {
         if (activeInfoBox && activePointIndex === index) return;
@@ -469,9 +515,41 @@ function resetWindDirection() {
     arrowElement.style.borderBottomColor = '#7a7a7a'; // Volver al color gris
 }
 
+async function showEventLabels() {
+    const data = await cargarCSV('vientos.csv');
+    const labels = data.map(item => item.year);
+    const chartContainer = document.getElementById('chart-container');
+    
+    const events = [
+        { year: 2011, text: 'Promulgación de Ley sobre Calidad del Aire' },
+        { year: 2015, text: 'Crisis ambiental en Santiago' },
+        { year: 2020, text: 'Políticas de descarbonización' }
+    ];
 
+    events.forEach(event => {
+        const index = labels.indexOf(event.year);
+        if (index !== -1) {
+            // Buscar las coordenadas del punto correspondiente
+            const point = windChart.getDatasetMeta(0).data[index];
 
-    dibujarGrafico();
+            // Crear el div de evento
+            const eventLabel = document.createElement('div');
+            eventLabel.className = 'event-label';
+            eventLabel.innerText = `${event.year}: ${event.text}`;
+
+            // Posicionar el evento encima del punto
+            const pointPosition = point.tooltipPosition();
+            eventLabel.style.top = `${pointPosition.y - 40}px`;  // Ajuste de altura
+            eventLabel.style.left = `${pointPosition.x - eventLabel.offsetWidth}px`;  // Centrar en el punto
+
+            chartContainer.appendChild(eventLabel);
+        }
+    });
+}
+
+// Llamada a la función para mostrar los eventos cuando el gráfico esté listo
+dibujarGrafico();
+
 </script>
 
 

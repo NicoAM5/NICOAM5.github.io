@@ -1,233 +1,154 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Historia del Viento y Contaminación del Aire en Chile</title>
-
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500&display=swap" rel="stylesheet">
-  <script src="https://d3js.org/d3.v6.min.js"></script>
-
-  <style>
-    body {
-      font-family: 'Poppins', sans-serif;
-      background-color: #f5f7fa;
-      margin: 0;
-      padding: 20px;
-    }
-
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
-    }
-
-    h1 {
-      text-align: center;
-      color: #333;
-      margin-bottom: 5px;
-    }
-
-    .description {
-      text-align: center;
-      font-size: 18px;
-      color: #555;
-      margin-bottom: 30px;
-    }
-
-    #chart {
-      margin-top: 40px;
-      position: relative;
-    }
-
-    footer {
-      text-align: center;
-      margin-top: 30px;
-      color: #777;
-    }
-
-    .source-link {
-      font-size: 12px;
-      margin-top: 10px;
-      color: #555;
-    }
-
-    .source-link a {
-      color: #FF9800;
-      text-decoration: none;
-    }
-
-    .source-link a:hover {
-      text-decoration: underline;
-    }
-
-    .controls {
-      text-align: center;
-      margin-top: 20px;
-    }
-
-    .play-button {
-      background-color: #FF9800;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 5px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    
-    .play-button:hover {
-      background-color: #e88b00;
-    }
-  </style>
-</head>
-<body>
-
-<div class="container">
-  <h1>Historia del Viento y Contaminación del Aire en Chile</h1>
-  <p class="description">
-    Explora la relación entre la intensidad del viento y los hitos en política y crisis ambiental en Santiago de Chile durante los últimos años.
-  </p>
-
-  <div id="chart"></div>
-  <div class="source-link">
-    Fuente: <a href="https://www.meteochile.gob.cl/" target="_blank">Dirección Meteorológica de Chile</a>
-    Estación: 330019
-  </div>
-
-  <div class="controls">
-    <button class="play-button" id="playButton">Play</button>
-  </div>
-
-  <footer>
-    <p>IIC2026 - Grupo 11 - 2024-2</p>
-  </footer>
+<div id="chart-container">
+  <svg id="windChart"></svg>
 </div>
 
+<div class="wind-rose">
+  <div id="wind-center">
+      <div class="arrow"></div>
+  </div>
+  <div id="wind-N" class="direction">N</div>
+  <!-- Agrega el resto de las direcciones como NE, E, etc. -->
+</div>
+
+<script src="https://d3js.org/d3.v6.min.js"></script>
 <script>
-    // Configuración inicial
-    const width = 800;
-    const height = 400;
-    const margin = {top: 50, right: 50, bottom: 50, left: 50};
+  let windData;
+  let currentAudio = null;
+  let activeInfoBox = null;
+  let windHistoryPlaying = false;
+  let soundPlaying = false;
+  let currentIndex = 0;
+  let windMarker = null;
+  let animationFrameId;
 
-    // Crear SVG para el gráfico
-    const svg = d3.select("#chart")
-                  .append("svg")
-                  .attr("width", width + margin.left + margin.right)
-                  .attr("height", height + margin.top + margin.bottom);
-
-    // Crear grupo de elementos para el gráfico
-    const chartGroup = svg.append("g")
-                          .attr("transform", `translate(${margin.left}, ${margin.top})`);
-
-    // Sonido de viento
-    const sonidoViento = new Audio("wind_sound.wav");
-    sonidoViento.loop = true; // Hacer que el sonido se reproduzca en bucle
-    let isPlaying = false;
-    let animationFrame;
-
-    // Cargar datos del CSV con punto y coma como delimitador
-    d3.dsv(";", "vientos.csv").then(data => {
-      data.forEach(d => {
-        d.AÑO = +d.AÑO;
-        d.INTENSIDAD = +d.INTENSIDAD.replace(' kt', '');
+  async function cargarCSV(ruta) {
+      const response = await fetch(ruta);
+      const data = await response.text();
+      return data.trim().split('\n').slice(1).map(line => {
+          const [year, intensity, direction] = line.split(';');
+          return {
+              year: +year,
+              intensity: +intensity.replace(' kt', ''),
+              direction: direction.trim()
+          };
       });
+  }
 
-      const x = d3.scaleLinear()
-                  .domain(d3.extent(data, d => d.AÑO))
-                  .range([0, width]);
+  async function dibujarGrafico() {
+      windData = await cargarCSV('vientos.csv');
 
-      const y = d3.scaleLinear()
-                  .domain([0, d3.max(data, d => d.INTENSIDAD)])
-                  .range([height, 0]);
+      const margin = { top: 20, right: 20, bottom: 50, left: 50 };
+      const width = 800 - margin.left - margin.right;
+      const height = 400 - margin.top - margin.bottom;
+
+      const svg = d3.select('#windChart')
+          .attr('width', width + margin.left + margin.right)
+          .attr('height', height + margin.top + margin.bottom)
+          .append('g')
+          .attr('transform', `translate(${margin.left},${margin.top})`);
+
+      const xScale = d3.scaleLinear()
+          .domain(d3.extent(windData, d => d.year))
+          .range([0, width]);
+
+      const yScale = d3.scaleLinear()
+          .domain([0, 40])
+          .range([height, 0]);
+
+      const line = d3.line()
+          .x(d => xScale(d.year))
+          .y(d => yScale(d.intensity));
+
+      svg.append('path')
+          .datum(windData)
+          .attr('fill', 'none')
+          .attr('stroke', '#FF9800')
+          .attr('stroke-width', 2)
+          .attr('d', line);
+
+      svg.selectAll('circle')
+          .data(windData)
+          .enter()
+          .append('circle')
+          .attr('cx', d => xScale(d.year))
+          .attr('cy', d => yScale(d.intensity))
+          .attr('r', 4)
+          .attr('fill', '#FF9800')
+          .on('mouseenter', (event, d) => showInfoBox(d))
+          .on('mouseleave', closeInfoBox);
 
       // Ejes
-      chartGroup.append("g")
-         .attr("transform", `translate(0,${height})`)
-         .call(d3.axisBottom(x).ticks(data.length).tickFormat(d3.format("d")));
+      svg.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(xScale));
+      svg.append('g').call(d3.axisLeft(yScale));
 
-      chartGroup.append("g")
-         .call(d3.axisLeft(y));
+      // Etiquetas de ejes
+      svg.append("text").attr("x", width / 2).attr("y", height + margin.bottom / 2)
+          .style("text-anchor", "middle").text("Año");
+      svg.append("text").attr("transform", "rotate(-90)").attr("y", -margin.left)
+          .attr("x", -height / 2).style("text-anchor", "middle").text("Intensidad (kt)");
+  }
 
-      // Generar línea de viento
-      const line = d3.line()
-                     .x(d => x(d.AÑO))
-                     .y(d => y(d.INTENSIDAD));
+  function showInfoBox(d) {
+      closeInfoBox();
+      const infoBox = document.createElement('div');
+      infoBox.className = 'info-box visible';
+      infoBox.innerHTML = `
+          <p><strong>Año:</strong> ${d.year}</p>
+          <p><strong>Intensidad:</strong> ${d.intensity} kt</p>
+          <div class="play-pause-icon" onclick="toggleWindSimulation(${d.intensity}, this)">
+              ▶️ Simular viento
+          </div>
+      `;
+      document.getElementById('chart-container').appendChild(infoBox);
+      highlightWindDirection(d.direction);
+  }
 
-      const path = chartGroup.append("path")
-         .datum(data)
-         .attr("fill", "none")
-         .attr("stroke", "#FF9800")
-         .attr("stroke-width", 2)
-         .attr("d", line);
-
-      // Añadir puntos de intensidad
-      chartGroup.selectAll("circle")
-        .data(data)
-        .enter()
-        .append("circle")
-        .attr("cx", d => x(d.AÑO))
-        .attr("cy", d => y(d.INTENSIDAD))
-        .attr("r", 6)
-        .attr("fill", "#FF9800");
-
-      // Crear marcador que se moverá a lo largo de la línea
-      const marker = chartGroup.append("circle")
-                                .attr("r", 5) // Tamaño más pequeño
-                                .attr("fill", "red")
-                                .attr("opacity", 0); // Inicialmente oculto
-
-      // Función de animación
-      function animateMarker() {
-        if (isPlaying) {
-          cancelAnimationFrame(animationFrame);
-          sonidoViento.pause();
-          sonidoViento.currentTime = 0;
-          document.getElementById("playButton").textContent = "Play";
-          isPlaying = false;
-          marker.attr("opacity", 0); // Ocultar marcador cuando se pausa
-          return;
-        }
-
-        isPlaying = true;
-        document.getElementById("playButton").textContent = "Pause";
-
-        // Obtener la longitud total de la línea
-        const totalLength = path.node().getTotalLength();
-        let progress = 0;
-
-        marker.attr("opacity", 1); // Hacer visible el marcador al iniciar
-
-        function animate() {
-          if (progress >= totalLength) {
-            sonidoViento.pause();
-            sonidoViento.currentTime = 0;
-            document.getElementById("playButton").textContent = "Play";
-            isPlaying = false;
-            marker.attr("opacity", 0); // Ocultar marcador al finalizar
-            return;
-          }
-
-          // Obtener la posición del marcador a lo largo de la línea
-          const point = path.node().getPointAtLength(progress);
-          marker.attr("cx", point.x).attr("cy", point.y);
-
-          // Ajustar el volumen según la altura del marcador en el gráfico
-          const volume = Math.min(Math.max(1 - (point.y / height), 0), 1);
-          sonidoViento.volume = volume;
-
-          if (sonidoViento.paused) sonidoViento.play();
-
-          progress += 0.55; // Ajustar para velocidad más lenta
-          animationFrame = requestAnimationFrame(animate);
-        }
-
-        animate();
+  function closeInfoBox() {
+      if (activeInfoBox) {
+          activeInfoBox.remove();
+          activeInfoBox = null;
       }
+      if (currentAudio) {
+          currentAudio.pause();
+          currentAudio = null;
+          soundPlaying = false;
+      }
+      resetWindDirection();
+  }
 
-      // Evento de clic para el botón de Play/Pause
-      document.getElementById("playButton").addEventListener("click", animateMarker);
-    });
+  function toggleWindSimulation(intensity, iconElement) {
+      if (currentAudio) {
+          currentAudio.pause();
+          currentAudio = null;
+          iconElement.innerHTML = '▶️ Simular viento';
+          soundPlaying = false;
+      } else {
+          const audio = new Audio('wind_sound.wav');
+          audio.volume = Math.min(Math.max(intensity / 50, 0), 1);
+          audio.loop = true;
+          audio.play();
+          currentAudio = audio;
+          soundPlaying = true;
+          iconElement.innerHTML = '⏸️ Detener viento';
+          audio.addEventListener('ended', () => iconElement.innerHTML = '▶️ Simular viento');
+      }
+  }
+
+  function highlightWindDirection(direction) {
+      resetWindDirection();
+      const arrowElement = document.querySelector('.wind-rose #wind-center .arrow');
+      const directionAngles = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315 };
+      const angle = directionAngles[direction] || 0;
+      arrowElement.style.transform = `translate(-50%, -100%) rotate(${angle}deg)`;
+      arrowElement.style.borderBottomColor = '#FF0000';
+  }
+
+  function resetWindDirection() {
+      document.querySelectorAll('.wind-rose .active').forEach(el => el.classList.remove('active'));
+      const arrowElement = document.querySelector('.wind-rose #wind-center .arrow');
+      arrowElement.style.transform = 'translate(-50%, -100%) rotate(0deg)';
+      arrowElement.style.borderBottomColor = '#7a7a7a';
+  }
+
+  dibujarGrafico();
 </script>
-
-</body>
-</html>

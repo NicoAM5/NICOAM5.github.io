@@ -115,29 +115,14 @@
         align-items: center;
     }
 
-    .event-box {
-      position: absolute;
-      background-color: #fff;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 10px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-      max-width: 200px;
-      font-size: 14px;
-      z-index: 10;
-    }
-
-
-
-
     .wind-rose {
   position: absolute;
-  top: 418px; /* Reduce este valor para acercar la rosa al gráfico */
-  left: 70px; /* Ajusta este valor para centrarla mejor horizontalmente */
+  top: 36px; 
+  left: 1040px; 
   display: grid;
   grid-template-columns: 30px 60px 30px;
   grid-template-rows: 30px 60px 30px;
-  width: 120px; /* Ajusta el ancho si es necesario */
+  width: 120px; 
   height: 120px;
   justify-items: center;
   align-items: center;
@@ -154,7 +139,7 @@
 .wind-rose div {
     font-weight: bold;
     color: #7a7a7a;
-    font-size: 16px; /* Reducir tamaño del texto */
+    font-size: 16px; 
     transition: color 0.3s;
 }
 
@@ -205,8 +190,8 @@
     position: absolute;
     top: 50%;
     left: 50%;
-    transform-origin: center bottom; /* Centrar el punto de rotación */
-    transform: translate(-50%, -100%) rotate(0deg); /* Mantenerla centrada y rotarla hacia las direcciones */
+    transform-origin: center bottom; 
+    transform: translate(-50%, -100%) rotate(0deg); 
     width: 0;
     height: 0;
     border-left: 5px solid transparent;
@@ -237,9 +222,9 @@
 <body>
 
     <div class="container">
-      <h1>Caídas en la Intensidad del viento en base a hitos importantes frente a la crisis climática en Santiago de Chile</h1>
+      <h1>Historia de los Vientos y Cambio Climático en Santiago de Chile</h1>
       <p class="description">
-        Intensidad de los vientos y su relación con eventos históricos relevantes a la crisis climática entre 2010 y 2024.
+        Intensidad de los vientos y su relación con eventos históricos relevantes entre 2010 y 2024.
       </p>
 
       <div id="chart-container">
@@ -248,10 +233,10 @@
         
         
         <!-- InfoBoxes y Rosa de los Vientos... -->
-      <div class="event-box" style="top: 65px; left: 136px;">2011: Promulgación de Ley sobre Calidad del Aire</div>
-      <div class="event-box" style="top: 280px; left: 462px;">2015: Crisis ambiental en Santiago</div>
-      <div class="event-box" style="top: 70px; left: 865px;">2020: Confinamiento por pandemia Covid-19</div>
-        
+        <button id="connectButton">Conectar Arduino</button>
+        <div class="info-box" style="top: 60px; left: 50px;">2011: Promulgación de Ley sobre Calidad del Aire</div>
+        <div class="info-box" style="top: 150px; left: 300px;">2015: Crisis ambiental en Santiago</div>
+        <div class="info-box" style="top: 60px; left: 750px;">2020: Políticas de descarbonización</div>
   
         <div class="wind-rose">
           <div id="wind-NW">NW</div>
@@ -286,7 +271,14 @@
     let activePointIndex = null;
     let mouseOnPoint = false;
     let mouseOnInfoBox = false;
-    let soundPlaying = false; // Nueva bandera para el estado del sonido
+    let soundPlaying = false; 
+
+    let windHistoryPlaying = false;
+    let currentIndex = 0;
+    let windMarker = null;
+    let animationFrameId;
+    let windChart; 
+    let port, writer;
 
     async function cargarCSV(ruta) {
         const response = await fetch(ruta);
@@ -306,99 +298,145 @@
             });
     }
 
-    async function dibujarGrafico() {
-    const data = await cargarCSV('vientos.csv');
-    const ctx = document.getElementById('windChart').getContext('2d');
-    const labels = data.map(item => item.year);
-    const intensities = data.map(item => item.intensity);
+    async function connectToArduino() {
+        try {
+            port = await navigator.serial.requestPort();
+            await port.open({ baudRate: 9600 });
+            writer = port.writable.getWriter();
+            console.log("Conexión establecida con Arduino");
+        } catch (err) {
+            console.error("Error al conectar con Arduino", err);
+        }
+    }
 
-    const chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels,
-            datasets: [{
-                label: 'Intensidad promedio del Viento (kt)',
-                data: intensities,
-                borderColor: '#FF9800',
-                backgroundColor: 'rgba(255, 152, 0, 0.2)',
-                borderWidth: 2,
-                pointRadius: 6,
-                pointBackgroundColor: '#FF9800',
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'top',
-                    labels: { font: { size: 14, weight: 'bold' } }
-                },
-                tooltip: { enabled: false }
+    function directionToAngle(direction) {
+        const directionMap = {
+            N: 0,
+            NE: 22.5,
+            E: 45,
+            SE: 67.5,
+            S: 90,
+            SW: 112.5,
+            W: 135,
+            NW: 157.5
+        };
+        return directionMap[direction] || 0;
+    }
+
+    async function sendCommandToArduino(type, value) {
+        if (writer) {
+            const data = new TextEncoder().encode(`${type}:${value}\n`);
+            await writer.write(data);
+            console.log(`Comando enviado: ${type}:${value}`);
+        }
+    }
+
+    async function dibujarGrafico() {
+        const data = await cargarCSV('vientos.csv');
+        const ctx = document.getElementById('windChart').getContext('2d');
+        const labels = data.map(item => item.year);
+        const intensities = data.map(item => item.intensity);
+
+        const hitosHistoricos = [
+            { year: 2011, description: "Promulgación de Ley sobre Calidad del Aire" },
+            { year: 2015, description: "Crisis ambiental en Santiago" },
+            { year: 2020, description: "Políticas de descarbonización" },
+        ];
+
+        windChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Intensidad promedio del Viento (kt)',
+                    data: intensities,
+                    borderColor: '#FF9800',
+                    backgroundColor: 'rgba(255, 152, 0, 0.2)',
+                    borderWidth: 2,
+                    pointRadius: 6,
+                    pointBackgroundColor: '#FF9800',
+                }]
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 40,
-                    title: { display: true, text: 'Intensidad (kt)', font: { size: 16, weight: 'bold' } }
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        }
+                    },
+                    tooltip: {
+                        enabled: false
+                    },
+                    annotation: {
+                        annotations: hitosHistoricos.map(hito => ({
+                            type: 'line',
+                            xMin: hito.year,
+                            xMax: hito.year,
+                            borderColor: 'red',
+                            borderWidth: 2,
+                            label: {
+                                content: hito.description,
+                                enabled: true,
+                                position: 'top',
+                                backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                                font: {
+                                    size: 10
+                                }
+                            }
+                        }))
+                    }
                 },
-                x: {
-                    title: { display: true, text: 'Año', font: { size: 16, weight: 'bold' } }
-                }
-            },
-            onHover: (event, elements) => {
-                if (elements.length > 0) {
-                    mouseOnPoint = true;
-                    const index = elements[0].index;
-                    const year = labels[index];
-                    const intensity = intensities[index];
-                    const direction = data[index].direction;
-                    showInfoBox(year, intensity, elements[0].element, index, direction);
-                } else {
-                    mouseOnPoint = false;
-                    setTimeout(() => {
-                        if (!mouseOnPoint && !mouseOnInfoBox && !soundPlaying) closeInfoBox(); // Revisar bandera
-                    }, 100);
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 40,
+                        title: {
+                            display: true,
+                            text: 'Intensidad (kt)',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Año',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        }
+                    }
+                },
+                onHover: async (event, elements) => {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const year = labels[index];
+                        const intensity = intensities[index];
+                        const direction = data[index].direction;
+
+                        const angle = directionToAngle(direction);
+                        await sendCommandToArduino('D', angle); 
+                        await sendCommandToArduino('I', intensity); 
+
+                        showInfoBox(year, intensity, elements[0].element, index, direction);
+                    } else {
+                        mouseOnPoint = false;
+                        setTimeout(() => {
+                            if (!mouseOnPoint && !mouseOnInfoBox && !soundPlaying) closeInfoBox();
+                        }, 100);
+                    }
                 }
             }
-        }
-    });
-
-    // Después de dibujar el gráfico, muestra los eventos
-    showEventLabels(labels, data, chart);
-}
-
-async function showEventLabels(labels, data, chart) {
-    const chartContainer = document.getElementById('chart-container');
-    
-    const events = [
-        { year: 2011, text: 'Promulgación de Ley sobre Calidad del Aire' },
-        { year: 2015, text: 'Crisis ambiental en Santiago' },
-        { year: 2020, text: 'Políticas de descarbonización' }
-    ];
-
-    events.forEach(event => {
-        const index = labels.indexOf(event.year);
-        if (index !== -1) {
-            // Obtener las coordenadas del punto correspondiente usando el chart
-            const point = chart.getDatasetMeta(0).data[index];
-
-            // Crear el div para el evento
-            const eventLabel = document.createElement('div');
-            eventLabel.className = 'event-label';
-            eventLabel.innerText = `${event.year}: ${event.text}`;
-
-            // Obtener las coordenadas del punto en el gráfico usando el método 'getPointPosition'
-            const pointPosition = point.getCenterPoint();  // Usamos el centro del punto para el evento
-
-            // Posicionar el evento sobre el punto
-            eventLabel.style.top = `${pointPosition.y - 40}px`;  // Ajustar la altura para que esté arriba
-            eventLabel.style.left = `${pointPosition.x - eventLabel.offsetWidth / 2}px`;  // Centrar sobre el punto
-
-            chartContainer.appendChild(eventLabel);
-        }
-    });
-}
-
+        });
+    }
 
 
     function showInfoBox(year, intensity, pointElement, index, direction) {
@@ -427,7 +465,7 @@ async function showEventLabels(labels, data, chart) {
         infoBox.addEventListener('mouseleave', () => {
             mouseOnInfoBox = false;
             setTimeout(() => {
-                if (!mouseOnPoint && !mouseOnInfoBox && !soundPlaying) closeInfoBox(); // Revisar bandera
+                if (!mouseOnPoint && !mouseOnInfoBox && !soundPlaying) closeInfoBox(); 
             }, 100);
         });
 
@@ -446,7 +484,7 @@ async function showEventLabels(labels, data, chart) {
             currentAudio.pause();
             currentAudio.currentTime = 0;
             currentAudio = null;
-            soundPlaying = false; // Actualizar la bandera
+            soundPlaying = false; 
         }
         activePointIndex = null;
         resetWindDirection();
@@ -458,7 +496,7 @@ async function showEventLabels(labels, data, chart) {
             currentAudio.currentTime = 0;
             currentAudio = null;
             iconElement.innerHTML = '▶️ Simular viento';
-            soundPlaying = false; // Actualizar la bandera
+            soundPlaying = false; 
             resetWindDirection();
         } else {
             const audio = new Audio('wind_sound.wav');
@@ -468,94 +506,53 @@ async function showEventLabels(labels, data, chart) {
 
             audio.play();
             currentAudio = audio;
-            soundPlaying = true; // Actualizar la bandera
+            soundPlaying = true; 
             iconElement.innerHTML = '⏸️ Detener viento';
 
             audio.addEventListener('ended', () => {
                 iconElement.innerHTML = '▶️ Simular viento';
-                soundPlaying = false; // Actualizar la bandera
+                soundPlaying = false; 
             });
         }
     }
 
     function highlightWindDirection(direction) {
-    resetWindDirection(); // Resetear cualquier dirección activa
+        resetWindDirection(); 
 
-    const directionElement = document.getElementById(`wind-${direction}`);
-    const arrowElement = document.querySelector('.wind-rose #wind-center .arrow');
+        const directionElement = document.getElementById(`wind-${direction}`);
+        const arrowElement = document.querySelector('.wind-rose #wind-center .arrow');
 
-    if (directionElement) {
-        directionElement.classList.add('active');
+        if (directionElement) {
+            directionElement.classList.add('active');
 
-        // Mapear cada dirección a un ángulo
-        const directionAngles = {
-            N: 0,
-            NE: 45,
-            E: 90,
-            SE: 135,
-            S: 180,
-            SW: 225,
-            W: 270,
-            NW: 315
-        };
+            const directionAngles = {
+                N: 0,
+                NE: 45,
+                E: 90,
+                SE: 135,
+                S: 180,
+                SW: 225,
+                W: 270,
+                NW: 315
+            };
 
-        const angle = directionAngles[direction];
-        arrowElement.style.transform = `translate(-50%, -100%) rotate(${angle}deg)`;
-        arrowElement.style.borderBottomColor = '#FF0000'; // Cambiar color a rojo
-    }
-}
-
-function resetWindDirection() {
-    document.querySelectorAll('.wind-rose .active').forEach(element => {
-        element.classList.remove('active');
-    });
-
-    const arrowElement = document.querySelector('.wind-rose #wind-center .arrow');
-    arrowElement.style.transform = 'translate(-50%, -100%) rotate(0deg)';
-    arrowElement.style.borderBottomColor = '#7a7a7a'; // Volver al color gris
-}
-
-async function showEventLabels() {
-    const data = await cargarCSV('vientos.csv');
-    const labels = data.map(item => item.year);
-    const chartContainer = document.getElementById('chart-container');
-    
-    const events = [
-        { year: 2011, text: 'Promulgación de Ley sobre Calidad del Aire' },
-        { year: 2015, text: 'Crisis ambiental en Santiago' },
-        { year: 2020, text: 'Políticas de descarbonización' }
-    ];
-
-    events.forEach(event => {
-        const index = labels.indexOf(event.year);
-        if (index !== -1) {
-            // Buscar las coordenadas del punto correspondiente
-            const point = windChart.getDatasetMeta(0).data[index];
-
-            // Crear el div de evento
-            const eventLabel = document.createElement('div');
-            eventLabel.className = 'event-label';
-            eventLabel.innerText = `${event.year}: ${event.text}`;
-
-            // Posicionar el evento encima del punto
-            const pointPosition = point.tooltipPosition();
-            eventLabel.style.top = `${pointPosition.y - 40}px`;  // Ajuste de altura
-            eventLabel.style.left = `${pointPosition.x - eventLabel.offsetWidth}px`;  // Centrar en el punto
-
-            chartContainer.appendChild(eventLabel);
+            const angle = directionAngles[direction];
+            arrowElement.style.transform = `translate(-50%, -100%) rotate(${angle}deg)`;
+            arrowElement.style.borderBottomColor = '#FF0000'; // Cambiar color a rojo
         }
-    });
-}
+    }
 
-// Llamada a la función para mostrar los eventos cuando el gráfico esté listo
-dibujarGrafico();
+    function resetWindDirection() {
+        document.querySelectorAll('.wind-rose .active').forEach(element => {
+            element.classList.remove('active');
+        });
 
+        const arrowElement = document.querySelector('.wind-rose #wind-center .arrow');
+        arrowElement.style.transform = 'translate(-50%, -100%) rotate(0deg)';
+        arrowElement.style.borderBottomColor = '#7a7a7a'; // Volver al color gris
+    }
+
+    dibujarGrafico();
 </script>
-
-
-
-
-
-
 </body>
 </html>
